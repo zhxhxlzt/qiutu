@@ -12,7 +12,7 @@ class MyServer:
         loop.run_until_complete(f)
 
     async def _start(self):
-        server = await asyncio.start_server(self.connect_cb, "localhost", 52314)
+        server = await asyncio.start_server(self.connect_cb, "45.67.54.238", 52314)
         addr = server.sockets[0].getsockname()
         print(f'Serving on {addr}')
 

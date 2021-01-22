@@ -11,7 +11,7 @@ class MyClient:
 
     async def _start(self):
         message = 'hello server'
-        reader, writer = await asyncio.open_connection("localhost", 52314)
+        reader, writer = await asyncio.open_connection("45.67.54.238", 52314)
         print(f'Send: {message!r}')
         writer.write(message.encode())
 
