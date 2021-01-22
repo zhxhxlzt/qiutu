@@ -69,13 +69,15 @@ class ClientPlayer:
         reader, writer = await asyncio.open_connection(g_Config.server_host, g_Config.server_port)
         self.m_reader = reader
         self.m_writer = writer
+        Log("成功连接！")
 
     async def Join(self):
         await SendMsg(self.m_writer, Protocol.Join, '')
-        Log('send join request')
+        Log('成功加入比赛队列！')
 
     async def Start(self):
         await SendMsg(self.m_writer, Protocol.Start, '')
+        Log("申请开始比赛...")
 
     async def Cooperate(self):
         await SendMsg(self.m_writer, Protocol.Response, ResponceOp.Cooperate)
@@ -103,19 +105,20 @@ class RaceClient:
 
     def Start(self):
         self.m_cmdThread = threading.Thread(target=self.UserCmd)
+        self.m_cmdThread.setDaemon(True)
         self.m_cmdThread.start()
         loop = asyncio.get_event_loop()
         loop.run_until_complete(self._Start())
 
     async def _Start(self):
         await self.m_player.Connect()
-        print('connect successed!')
+        await self.m_player.Join()
         loop = asyncio.get_running_loop()
         loop.create_task(self.ListenServer())
         while not self.m_close:
             await self.ProcessCmd()
             await asyncio.sleep(0.1)
-        print('race stoped')
+        print('已断开连接！')
 
     async def ListenServer(self):
         while not self.m_close:
@@ -125,14 +128,12 @@ class RaceClient:
                 self.m_close = True
                 return
             if proto == Protocol.Info:
-                print(data)
+                Log(data)
 
     async def ProcessCmd(self):
         cmd = self.FetchCmd()
         if not cmd:
             return
-        if cmd == str(Protocol.Join):
-            await self.m_player.Join()
 
         if cmd == str(Protocol.Start):
             await self.m_player.Start()
@@ -146,7 +147,7 @@ class RaceClient:
             await self.m_player.Quit()
 
     def UserCmd(self):
-        while True:
+        while not self.m_close:
             cmd = input()
             with self.m_cmdLock:
                 self.m_cmd = cmd
@@ -169,8 +170,6 @@ class ServerPlayer:
         self.m_waitingResponse = False
         self.alive = True
         self.name = 'player'
-
-
 
     def ClearRaceHistory(self):
         self.m_history.clear()
@@ -209,7 +208,7 @@ class ServerPlayer:
 
     async def SetResponse(self, op):
         if not self.m_waitingResponse:
-            await self.SendMsg("非我的回合，不接受指令!")
+            await self.SendMsg("目前是对手的回合，不接受行动指令!")
         self.m_responce = op
 
     def GetResponse(self):
@@ -221,12 +220,13 @@ class ServerPlayer:
             ResponceOp.Cooperate: "合作",
             ResponceOp.Betry: "背叛"
         }
-        await self.SendMsg(f"你的回合，对手上次的行动[{opstrs[op]}]; 你的行动(y:合作, n:背叛):")
+        await self.SendMsg(f"回合[ {self.m_round} ]，对手的行动:[ {opstrs[op]} ]; 开始你的行动(y:合作, n:背叛):")
 
         self.m_responce = None
         self.m_waitingResponse = True
         while self.m_responce is None:
             await asyncio.sleep(0.1)
+        await self.SendMsg(f'你的行动是[{opstrs[self.m_responce]}], 等待对手行动...')
         self.m_waitingResponse = False
         return self.m_responce
 
@@ -244,14 +244,18 @@ class ServerRaceMgr:
         self.m_playing = False
 
     async def Join(self, player):
-        if self.m_playing:
-            player.SendMsg("比赛正在进行中，无法加入!")
+        if player in self.m_players:
+            await player.SendMsg("已加入比赛，不能重复加入!")
             return
 
-        if player in self.m_players:
-            player.SendMsg("已加入比赛，不能重复加入!")
-            return
         self.m_players.append(player)
+
+        info = f"当前人数: {len(self.m_players)}"
+        if self.m_playing:
+            await player.SendMsg(info + f", 比赛正在进行中, 请等待!")
+            return
+
+        await self.BroadcastMsg(info + ', 按2申请开始比赛！')
 
     def Playable(self):
         return not self.m_playing and len(self.m_players) % 2 == 0
@@ -267,9 +271,10 @@ class ServerRaceMgr:
         return races
 
     async def Start(self):
-        if not self.Playable():
-            if not self.m_playing:
-                await self.BroadcastMsg('人数不为偶数, 无法开始比赛！')
+        if self.m_playing:
+            return
+        if len(self.m_players) % 2 != 0:
+            await self.BroadcastMsg(f'当前人数{len(self.m_players)}不为偶数, 无法开始比赛！')
             return
         self.m_playing = True
         races = self.GetRaces()
@@ -280,7 +285,7 @@ class ServerRaceMgr:
         fs = []
         loop = asyncio.get_event_loop()
 
-        for race in self.GetRaces():
+        for race in races:
             fut = loop.create_task(self.StartRace(race))
             fs.append(fut)
 
@@ -325,13 +330,13 @@ class ServerRaceMgr:
         await self.SetAsVersusPlayer(race)
         cur_player, next_player = self.GetRandomSeqRacePlayer(race)
 
+        await self.BroadcastMsg("比赛开始！", race)
         op = None
+        await next_player.SendMsg("等待对手行动...")
         while not self.CheckStop(race):
             await self.NewRound(race)
-            await cur_player.SetCurVersusPlayerResponce(op)
-            op = await cur_player.WaitResponse()
-            await next_player.SetCurVersusPlayerResponce(op)
-            op = await next_player.WaitResponse()
+            op = await cur_player.WaitResponse(op)
+            op = await next_player.WaitResponse(op)
             await self.RoundEnd(race)
 
         await self.FinishRace(race)
@@ -343,21 +348,23 @@ class ServerRaceMgr:
             marks.append((p, p.GetMark()))
         marks.sort(key=lambda x: x[1])
         info = "排行榜:\n"
-        info = info + "\n".join([f"{k.name}:\t [{v}]" for k, v in marks])
+        info = info + "\n".join([f"选手: {k.name}\t 得分: [{v}]" for k, v in marks])
 
         for p in self.m_players:
-            my_markinfo = f'我的得分: [{p.GetMark()}]\n'
-            info = my_markinfo + info
-            await SendMsg(p.m_writer, Protocol.Info, info)
+            my_info = f'我的得分: [{p.GetMark()}]\n'
+            await SendMsg(p.m_writer, Protocol.Info, my_info + info)
 
-    async def BroadcastMsg(self, msg):
+    async def BroadcastMsg(self, msg, players=None):
+        if not players:
+            players = self.m_players
         fs = []
-        for p in self.m_players:
+        for p in players:
             if not p.alive:
                 continue
             f = p.SendMsg(msg)
             fs.append(f)
-        await asyncio.wait(fs)
+        if fs:
+            await asyncio.wait(fs)
 
 
 class RaceServer:
@@ -396,10 +403,15 @@ class RaceServer:
                 await self.m_race_mgr.Join(sp)
 
             elif prot == Protocol.Start:
-                 loop.create_task(self.m_race_mgr.Start())
+                if self.m_race_mgr.m_playing:
+                    await sp.SendMsg('不能申请开始比赛，比赛正在进行中！')
+                loop.create_task(self.m_race_mgr.Start())
 
             elif prot == Protocol.Response:
-                await sp.SetResponse(data)
+                if not self.m_race_mgr.m_playing:
+                    await sp.SendMsg('未开始比赛！')
+                else:
+                    await sp.SetResponse(data)
             elif prot == Protocol.Quit:
                 sp.alive = False
 
