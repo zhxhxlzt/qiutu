@@ -16,9 +16,12 @@ class Config:
     def DebugMode(self):
         self.server_host = "localhost"
 
-g_Config = Config()
-g_Config.DebugMode()
+    def AliyunMode(self):
+        self.server_host = "47.115.57.161"
 
+g_Config = Config()
+# g_Config.DebugMode()
+g_Config.AliyunMode()
 class ResponceOp:
     Cooperate = 0
     Betry = 1
