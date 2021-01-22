@@ -5,6 +5,8 @@ import json
 import struct
 import threading
 from typing import List
+import sys
+
 def Log(*msg):
     print(*msg)
 
@@ -16,12 +18,19 @@ class Config:
     def DebugMode(self):
         self.server_host = "localhost"
 
-    def AliyunMode(self):
+    def AliyunServer(self):
+        self.server_host = "172.21.87.68"
+
+    def ApplyClientMode(self):
         self.server_host = "47.115.57.161"
 
 g_Config = Config()
-# g_Config.DebugMode()
-g_Config.AliyunMode()
+
+if 'win' in sys.platform:
+    g_Config.ApplyClientMode()
+else:
+    g_Config.AliyunServer()
+
 class ResponceOp:
     Cooperate = 0
     Betry = 1
