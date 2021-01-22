@@ -34,6 +34,9 @@ class MyServer:
         writer.close()
 
 
-server = MyServer()
-server.start()
+# server = MyServer()
+# server.start()
 
+import player
+raceServer = player.RaceServer()
+raceServer.Start()

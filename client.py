@@ -21,5 +21,11 @@ class MyClient:
         print('Close the connection')
         writer.close()
 
-client = MyClient()
-client.start()
+# client = MyClient()
+# client.start()
+
+import player
+
+cp = player.RaceClient()
+
+cp.Start()
