@@ -14,6 +14,7 @@ class Config:
     def __init__(self):
         self.server_host = "45.67.54.238"
         self.server_port = 52314
+        self.stop_prop = 0.15
 
     def DebugMode(self):
         self.server_host = "localhost"
@@ -252,7 +253,6 @@ class ServerPlayer:
 class ServerRaceMgr:
     def __init__(self):
         self.m_players: List[ServerPlayer] = []
-        self.m_stopProp = 0.2
         self.m_playing = False
 
     async def Join(self, player):
@@ -307,7 +307,7 @@ class ServerRaceMgr:
         for p in race:
             if not p.alive:
                 return False
-        return random.random() < self.m_stopProp
+        return random.random() < g_Config.stop_prop
 
     async def ClearRaceHistory(self, race):
         for p in race:
@@ -345,7 +345,9 @@ class ServerRaceMgr:
         await self.BroadcastMsg("比赛开始！", race)
         op = None
         await next_player.SendMsg("等待对手行动...")
-        while not self.CheckStop(race):
+        minRound = 3    # 至少3个回合吧
+        while minRound > 0 or not self.CheckStop(race):
+            minRound -= 1
             await self.NewRound(race)
             op = await cur_player.WaitResponse(op)
             op = await next_player.WaitResponse(op)
