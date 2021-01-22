@@ -15,6 +15,7 @@ class Config:
         self.server_host = "45.67.54.238"
         self.server_port = 52314
         self.stop_prop = 0.15
+        self.debug = False
 
     def DebugMode(self):
         self.server_host = "localhost"
@@ -26,8 +27,10 @@ class Config:
         self.server_host = "47.115.57.161"
 
 g_Config = Config()
-
-if 'win' in sys.platform:
+print('platform:', sys.platform)
+if g_Config.debug:
+    g_Config.DebugMode()
+elif 'win' in sys.platform or 'mac' in sys.platform:
     g_Config.ApplyClientMode()
 else:
     g_Config.AliyunServer()
@@ -47,6 +50,7 @@ class Protocol:
     RequestMark = 6
     SendMark = 7
     Quit = 8
+    Talk = 9
 
 def PackMsg(protocol, data):
     msg = {
@@ -107,6 +111,9 @@ class ClientPlayer:
     async def ReceiveMark(self, mark):
         pass
 
+    async def Talk(self, msg):
+        await SendMsg(self.m_writer, Protocol.Talk, msg)
+
 
 class RaceClient:
     def __init__(self):
@@ -124,6 +131,7 @@ class RaceClient:
         loop.run_until_complete(self._Start())
 
     async def _Start(self):
+        Log("以msg开头来发送信息，如输入 'msg 你好!'，则对方收到 '你好!'")
         await self.m_player.Connect()
         await self.m_player.Join()
         loop = asyncio.get_running_loop()
@@ -158,6 +166,10 @@ class RaceClient:
             await self.m_player.Betray()
         elif cmd == "-1":
             await self.m_player.Quit()
+        elif cmd.startswith("msg"):
+            msg = cmd.strip("msg")
+            msg.strip()
+            await self.m_player.Talk(msg)
 
     def UserCmd(self):
         while not self.m_close:
@@ -167,7 +179,7 @@ class RaceClient:
 
     def FetchCmd(self):
         if not self.m_cmd:
-            return None
+            return ""
         with self.m_cmdLock:
             cmd, self.m_cmd = self.m_cmd, None
             return cmd
@@ -369,7 +381,7 @@ class ServerRaceMgr:
             await SendMsg(p.m_writer, Protocol.Info, my_info + info)
 
     async def BroadcastMsg(self, msg, players=None):
-        if not players:
+        if players is None:
             players = self.m_players
         fs = []
         for p in players:
@@ -402,7 +414,7 @@ class RaceServer:
         Log(f'Receive Connection from: {addr}')
 
         sp = ServerPlayer()
-        sp.name = addr
+        sp.name = str(addr)
         sp.SetReaderWriter(reader, writer)
         loop = asyncio.get_running_loop()
         while sp.alive:
@@ -429,6 +441,11 @@ class RaceServer:
             elif prot == Protocol.Quit:
                 sp.alive = False
 
+            elif prot == Protocol.Talk:
+                players = self.m_race_mgr.m_players[:]
+                players.remove(sp)
+                msg = sp.name + "说: " + data
+                await self.m_race_mgr.BroadcastMsg(msg, players)
 
 
 
