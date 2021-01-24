@@ -340,6 +340,9 @@ class ServerRaceMgr:
     async def Remove(self, player):
         if player in self.m_players:
             self.m_players.remove(player)
+            info = f'玩家[{player.name}]已离开比赛，当前人数:{len(self.m_players)}'
+            Log(info)
+            await self.BroadcastMsg(info)
 
     def Playable(self):
         return not self.m_playing and len(self.m_players) % 2 == 0
