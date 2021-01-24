@@ -1,1 +1,1 @@
-python client.py
+start Python38/python.exe client.py
