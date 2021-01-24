@@ -255,6 +255,9 @@ class ServerPlayer:
         self.m_waitingResponse = False
         return self.m_responce
 
+    async def Close(self):
+        self.m_writer.close()
+
     async def FinishRace(self):
         await self.SendMsg(f"比赛结束！")
 
@@ -280,6 +283,10 @@ class ServerRaceMgr:
             return
 
         await self.BroadcastMsg(info + ', 按2申请开始比赛！')
+
+    async def Remove(self, player):
+        if player in self.m_players:
+            self.m_players.remove(player)
 
     def Playable(self):
         return not self.m_playing and len(self.m_players) % 2 == 0
@@ -422,6 +429,7 @@ class RaceServer:
                 prot, data = await RcvMsg(reader)
             except:
                 sp.alive = False
+                await self.m_race_mgr.Remove(sp)
                 return
 
             print(f"Received Protocol:{prot}, data: {data} from {addr!r}")
