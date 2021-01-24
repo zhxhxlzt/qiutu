@@ -34,7 +34,6 @@ class Config:
         self.debug = False
         self.user_name = ''
 
-
     def DebugMode(self):
         self.server_host = "localhost"
 
@@ -58,10 +57,11 @@ g_Config.Load()
 print('platform:', sys.platform)
 if g_Config.debug:
     g_Config.DebugMode()
-elif 'win' in sys.platform or 'mac' in sys.platform:
-    g_Config.ApplyClientMode()
-else:
-    g_Config.AliyunServer()
+# 用自己的vps，这个就不用了
+# elif 'win' in sys.platform or 'mac' in sys.platform:
+#     g_Config.ApplyClientMode()
+# else:
+#     g_Config.AliyunServer()
 
 
 class ResponceOp:
