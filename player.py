@@ -51,6 +51,7 @@ class Protocol:
     SendMark = 7
     Quit = 8
     Talk = 9
+    Name = 10
 
 def PackMsg(protocol, data):
     msg = {
@@ -114,6 +115,9 @@ class ClientPlayer:
     async def Talk(self, msg):
         await SendMsg(self.m_writer, Protocol.Talk, msg)
 
+    async def SetName(self, name):
+        await SendMsg(self.m_writer, Protocol.Name, name)
+
 
 class RaceClient:
     def __init__(self):
@@ -132,6 +136,7 @@ class RaceClient:
 
     async def _Start(self):
         Log("以msg开头来发送信息，如输入 'msg 你好!'，则对方收到 '你好!'")
+        Log("以name开关来设置昵称，如输入 'name 小皮蛋'，则设置昵称为 小皮蛋")
         await self.m_player.Connect()
         await self.m_player.Join()
         loop = asyncio.get_running_loop()
@@ -170,6 +175,10 @@ class RaceClient:
             msg = cmd.strip("msg")
             msg.strip()
             await self.m_player.Talk(msg)
+        elif cmd.startswith('name'):
+            msg = cmd.strip('name')
+            msg.strip()
+            await self.m_player.na
 
     def UserCmd(self):
         while not self.m_close:
@@ -454,6 +463,13 @@ class RaceServer:
                 players.remove(sp)
                 msg = sp.name + "说: " + data
                 await self.m_race_mgr.BroadcastMsg(msg, players)
+            elif prot == Protocol.Name:
+                names = set([e.name for e in self.m_race_mgr.m_players])
+                if data not in names:
+                    sp.name = data
+                    await sp.SendMsg(f"成功设置名字: [{data}]")
+                else:
+                    await sp.SendMsg(f"名字已被占用！")
 
 
 
