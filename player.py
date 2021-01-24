@@ -178,7 +178,7 @@ class RaceClient:
         elif cmd.startswith('name'):
             msg = cmd.strip('name')
             msg.strip()
-            await self.m_player.na
+            await self.m_player.SetName(msg)
 
     def UserCmd(self):
         while not self.m_close:
