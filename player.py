@@ -10,6 +10,21 @@ import sys
 def Log(*msg):
     print(*msg)
 
+def LoadJson(path):
+    for code in ('gbk', 'utf-8'):
+        try:
+            with open(path, 'r', encoding=code) as fp:
+                return json.load(fp)
+        except:
+            continue
+    return {}
+
+def DumpJson(path, data):
+    with open(path, 'w') as fp:
+        json.dump(data, fp)
+
+
+config_path = "config.json"
 
 class Config:
     def __init__(self):
@@ -17,6 +32,8 @@ class Config:
         self.server_port = 52314
         self.stop_prop = 0.15
         self.debug = False
+        self.user_name = ''
+
 
     def DebugMode(self):
         self.server_host = "localhost"
@@ -27,8 +44,17 @@ class Config:
     def ApplyClientMode(self):
         self.server_host = "47.115.57.161"
 
+    def Load(self):
+        data = LoadJson(config_path)
+        self.user_name = data.get('user_name', '')
+
+    def Save(self):
+        if self.user_name:
+            DumpJson(config_path, {'user_name': self.user_name})
+
 
 g_Config = Config()
+g_Config.Load()
 print('platform:', sys.platform)
 if g_Config.debug:
     g_Config.DebugMode()
@@ -90,11 +116,9 @@ class ClientPlayer:
         reader, writer = await asyncio.open_connection(g_Config.server_host, g_Config.server_port)
         self.m_reader = reader
         self.m_writer = writer
-        Log("成功连接！")
 
     async def Join(self):
         await SendMsg(self.m_writer, Protocol.Join, '')
-        Log('成功加入比赛队列！')
 
     async def Start(self):
         await SendMsg(self.m_writer, Protocol.Start, '')
@@ -148,11 +172,13 @@ class RaceClient:
 我方合作，对方合作，各得3分。
 我方合作，对方背叛，只有背叛方得5分，反之类推。
 我方背叛，对方背叛，各得1分。
-        ''')
+''')
 
     async def _Start(self):
         self.Help()
         await self.m_player.Connect()
+        if g_Config.user_name:
+            await self.m_player.SetName(g_Config.user_name)
         await self.m_player.Join()
         loop = asyncio.get_running_loop()
         loop.create_task(self.ListenServer())
@@ -190,8 +216,11 @@ class RaceClient:
             msg = cmd.strip("msg")
             await self.m_player.Talk(msg.strip())
         elif cmd.startswith('name'):
-            msg = cmd.strip('name')
-            await self.m_player.SetName(msg.strip())
+            name = cmd.strip('name').strip()
+            if name:
+                g_Config.user_name = name
+                g_Config.Save()
+                await self.m_player.SetName(name)
         elif cmd.startswith('help'):
             self.Help()
 
@@ -301,8 +330,7 @@ class ServerRaceMgr:
             return
 
         self.m_players.append(player)
-
-        info = f"当前人数: {len(self.m_players)}"
+        info = f"成功加入比赛队列！当前人数: {len(self.m_players)}"
         if self.m_playing:
             await player.SendMsg(info + f", 比赛正在进行中, 请等待!")
             return
@@ -444,11 +472,11 @@ class RaceServer:
     async def ClientPlayerCb(self, reader, writer):
         addr = writer.get_extra_info('peername')
         Log(f'Receive Connection from: {addr}')
-
         sp = ServerPlayer()
         sp.name = str(addr)
+
         sp.SetReaderWriter(reader, writer)
-        loop = asyncio.get_running_loop()
+        await sp.SendMsg("成功连接！")
         while sp.alive:
             try:
                 prot, data = await RcvMsg(reader)
@@ -464,7 +492,9 @@ class RaceServer:
             elif prot == Protocol.Start:
                 if self.m_race_mgr.m_playing:
                     await sp.SendMsg('不能申请开始比赛，比赛正在进行中！')
-                loop.create_task(self.m_race_mgr.Start())
+                else:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(self.m_race_mgr.Start())
 
             elif prot == Protocol.Response:
                 if not self.m_race_mgr.m_playing:
