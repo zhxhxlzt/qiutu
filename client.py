@@ -1,31 +1,5 @@
-
-
-import asyncio
-
-
-class MyClient:
-    def start(self):
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(self._start())
-
-
-    async def _start(self):
-        message = 'hello server'
-        reader, writer = await asyncio.open_connection("45.67.54.238", 52314)
-        print(f'Send: {message!r}')
-        writer.write(message.encode())
-
-        data = await reader.read(100)
-        print(f'Received: {data.decode()!r}')
-
-        print('Close the connection')
-        writer.close()
-
-# client = MyClient()
-# client.start()
-
 import player
 
-cp = player.RaceClient()
-
-cp.Start()
+if __name__ == '__main__':
+    cp = player.RaceClient()
+    cp.Start()
