@@ -1,4 +1,3 @@
-
 import asyncio
 import random
 import json
@@ -7,8 +6,10 @@ import threading
 from typing import List
 import sys
 
+
 def Log(*msg):
     print(*msg)
+
 
 class Config:
     def __init__(self):
@@ -26,6 +27,7 @@ class Config:
     def ApplyClientMode(self):
         self.server_host = "47.115.57.161"
 
+
 g_Config = Config()
 print('platform:', sys.platform)
 if g_Config.debug:
@@ -34,6 +36,7 @@ elif 'win' in sys.platform or 'mac' in sys.platform:
     g_Config.ApplyClientMode()
 else:
     g_Config.AliyunServer()
+
 
 class ResponceOp:
     Cooperate = 0
@@ -52,6 +55,7 @@ class Protocol:
     Quit = 8
     Talk = 9
     Name = 10
+
 
 def PackMsg(protocol, data):
     msg = {
@@ -74,7 +78,6 @@ async def RcvMsg(reader: asyncio.StreamReader):
     msg = await reader.readexactly(msg_len[0])
     msg = json.loads(msg)
     return msg["proto"], msg["data"]
-
 
 
 class ClientPlayer:
@@ -134,9 +137,14 @@ class RaceClient:
         loop = asyncio.get_event_loop()
         loop.run_until_complete(self._Start())
 
+    def Help(self):
+        Log("0、输入help显示此帮助信息")
+        Log("1、以msg开头来发送信息，如输入 'msg 你好!'，则对方收到 '你好!'")
+        Log("2、以name开关来设置昵称，如输入 'name 小皮蛋'，则设置昵称为 小皮蛋")
+        Log("3、输入2申请开始比赛")
+
     async def _Start(self):
-        Log("以msg开头来发送信息，如输入 'msg 你好!'，则对方收到 '你好!'")
-        Log("以name开关来设置昵称，如输入 'name 小皮蛋'，则设置昵称为 小皮蛋")
+        self.Help()
         await self.m_player.Connect()
         await self.m_player.Join()
         loop = asyncio.get_running_loop()
@@ -173,12 +181,12 @@ class RaceClient:
             await self.m_player.Quit()
         elif cmd.startswith("msg"):
             msg = cmd.strip("msg")
-            msg.strip()
-            await self.m_player.Talk(msg)
+            await self.m_player.Talk(msg.strip())
         elif cmd.startswith('name'):
             msg = cmd.strip('name')
-            msg.strip()
-            await self.m_player.SetName(msg)
+            await self.m_player.SetName(msg.strip())
+        elif cmd.startswith('help'):
+            self.Help()
 
     def UserCmd(self):
         while not self.m_close:
@@ -192,6 +200,7 @@ class RaceClient:
         with self.m_cmdLock:
             cmd, self.m_cmd = self.m_cmd, None
             return cmd
+
 
 class ServerPlayer:
     def __init__(self):
@@ -350,7 +359,7 @@ class ServerRaceMgr:
         cur_idx = random.randint(0, 1)
         next_idx = 1 - cur_idx
         cur_player: ServerPlayer = race[cur_idx]
-        next_player:ServerPlayer = race[next_idx]
+        next_player: ServerPlayer = race[next_idx]
         return cur_player, next_player
 
     async def NewRound(self, race):
@@ -373,7 +382,7 @@ class ServerRaceMgr:
         await self.BroadcastMsg("比赛开始！", race)
         op = None
         await next_player.SendMsg("等待对手行动...")
-        minRound = 3    # 至少3个回合吧
+        minRound = 3  # 至少3个回合吧
         while minRound > 0 or not self.CheckStop(race):
             minRound -= 1
             await self.NewRound(race)
@@ -470,11 +479,3 @@ class RaceServer:
                     await sp.SendMsg(f"成功设置名字: [{data}]")
                 else:
                     await sp.SendMsg(f"名字已被占用！")
-
-
-
-
-
-
-
-
